@@ -1,0 +1,52 @@
+name: Optimizely Translation Audit
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"   # Every Monday 07:00 Helsinki time
+  workflow_dispatch:        # Manual "Run workflow" button
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write       # allows pushing results back to repo
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run translation audit
+        run: python optimizely_translation_crawler.py
+
+      - name: Generate HTML dashboard
+        run: python generate_dashboard.py
+
+      - name: Commit and push results
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p results docs
+          touch docs/.nojekyll
+          cp translation_audit.csv  results/translation_audit.csv
+          cp translation_audit.json results/translation_audit.json
+          git add results/ docs/
+          git diff --staged --quiet || git commit -m "chore: weekly translation audit $(date +'%Y-%m-%d')"
+          git push
+
+      - name: Upload CSV and JSON as downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: translation-audit-results
+          path: |
+            translation_audit.csv
+            translation_audit.json
+          retention-days: 90
